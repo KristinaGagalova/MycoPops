@@ -1,0 +1,3 @@
+sample,fastq_1,fastq_2
+SRR11747795,/scratch/pawsey1142/kgagalova/pop_analysis/test_data/sra-reads-final/SRR11747795_1.fastq,/scratch/pawsey1142/kgagalova/pop_analysis/test_data/sra-reads-final/SRR11747795_2.fastq
+SRR11747796,/scratch/pawsey1142/kgagalova/pop_analysis/test_data/sra-reads-final/SRR11747796_1.fastq,/scratch/pawsey1142/kgagalova/pop_analysis/test_data/sra-reads-final/SRR11747796_2.fastq

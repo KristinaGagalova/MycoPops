@@ -19,7 +19,6 @@ workflow ALIGN_MARKDUP_COVERAGE {
     ch_reads      // channel: [ val(meta), [ path(fastq_1), path(fastq_2) ] ]
     ch_fasta      // channel: [ val(meta_ref), path(fasta) ]
     ch_index      // channel: [ val(meta_ref), path(bwa-mem2 index directory) ]
-    ch_fai        // channel: [ val(meta_ref), path(fai) ]
     genome_size   // val: integer genome size in bp
 
     main:
@@ -41,12 +40,11 @@ workflow ALIGN_MARKDUP_COVERAGE {
     //   Picard expects: tuple val(meta), path(bam)
     //                   tuple val(meta2), path(fasta), path(fai)
     //
-    def ch_fasta_fai = ch_fasta.join(ch_fai.map { meta, fai -> [meta, fai] })
-        .map { meta, fasta, fai -> [meta, fasta, fai] }
-
+    // def ch_fasta_fai = ch_fasta.join(ch_fai.map { meta, fai -> [meta, fai] })
+    //    .map { meta, fasta, fai -> [meta, fasta, fai] }
     PICARD_MARKDUPLICATES(
         BWAMEM2_MEM.out.bam,
-        ch_fasta_fai
+        [ [:], [], [] ]
     )
 
     //
@@ -56,11 +54,11 @@ workflow ALIGN_MARKDUP_COVERAGE {
         PICARD_MARKDUPLICATES.out.bam,
         genome_size
     )
-    ch_versions = ch_versions.mix(COVERAGE_STATS.out.versions.first())
+    // ch_versions = ch_versions.mix(COVERAGE_STATS.out.versions.first())
 
     emit:
     bam          = PICARD_MARKDUPLICATES.out.bam       // channel: [ val(meta), path(bam) ]
     metrics      = PICARD_MARKDUPLICATES.out.metrics   // channel: [ val(meta), path(metrics) ]
     coverage     = COVERAGE_STATS.out.coverage         // channel: [ val(meta), path(tsv) ]
-    versions     = ch_versions                         // channel: [ path(versions.yml) ]
+    // versions     = ch_versions                         // channel: [ path(versions.yml) ]
 }

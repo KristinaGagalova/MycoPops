@@ -49,4 +49,5 @@ mise.toml
 *.sif
 *.sandbox/
 singularity/
+singularity_cache/
 apptainer/

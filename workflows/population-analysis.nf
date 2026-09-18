@@ -6,6 +6,9 @@ workflow POP_ANALYSIS_FLOW {
     main:
     if (!params.input) { error "Missing required parameter: --input" }
     if (!params.fasta) { error "Missing required parameter: --fasta" }
+    if (params.min_coverage == null || !params.min_coverage.toString().isNumber() || (params.min_coverage as double) < 0) {
+        error "Invalid --min_coverage '${params.min_coverage}': must be a number >= 0"
+    }
 
     def ch_reads = channel
         .fromPath(params.input, checkIfExists: true)
@@ -23,11 +26,16 @@ workflow POP_ANALYSIS_FLOW {
     READS_MAPPING(
         ch_reads,
         ch_fasta,
-        params.genome_size
+        params.genome_size,
+        params.min_coverage
     )
 
     emit:
-    bam      = READS_MAPPING.out.bam
-    metrics  = READS_MAPPING.out.metrics
-    coverage = READS_MAPPING.out.coverage
+    bam        = READS_MAPPING.out.bam        // [ meta, bam, bai ] samples passing --min_coverage
+    bam_all    = READS_MAPPING.out.bam_all
+    excluded   = READS_MAPPING.out.excluded
+    metrics    = READS_MAPPING.out.metrics
+    coverage   = READS_MAPPING.out.coverage
+    genome_cov = READS_MAPPING.out.genome_cov
+
 }

@@ -12,6 +12,8 @@
 include { BWAMEM2_MEM           } from '../../modules/nf-core/bwamem2/mem/main'
 include { PICARD_MARKDUPLICATES } from '../../modules/nf-core/picard/markduplicates/main'
 include { COVERAGE_STATS        } from '../../modules/local/coverage_stats'
+include { GENOME_COVERAGE       } from '../../modules/local/genome_coverage'
+include { SAMTOOLS_INDEX        } from '../../modules/nf-core/samtools/index/main'
 
 workflow ALIGN_MARKDUP_COVERAGE {
 
@@ -46,6 +48,16 @@ workflow ALIGN_MARKDUP_COVERAGE {
         BWAMEM2_MEM.out.bam,
         [ [:], [], [] ]
     )
+    
+    //
+    // STEP 2b: Index the duplicate-marked BAM (-> <sample>.markdup.bam.bai)
+    //
+    SAMTOOLS_INDEX(
+        PICARD_MARKDUPLICATES.out.bam
+    )
+
+    def ch_bam_bai = PICARD_MARKDUPLICATES.out.bam
+        .join(SAMTOOLS_INDEX.out.index, failOnMismatch: true, failOnDuplicate: true)
 
     //
     // STEP 3: Calculate coverage statistics
@@ -56,9 +68,21 @@ workflow ALIGN_MARKDUP_COVERAGE {
     )
     // ch_versions = ch_versions.mix(COVERAGE_STATS.out.versions.first())
 
+    //
+    // STEP 4: Genome-wide mean depth from aligned bases (samtools depth -aa)
+    //   No genome size needed; duplicates marked by Picard are excluded.
+    //
+    GENOME_COVERAGE(
+        PICARD_MARKDUPLICATES.out.bam
+    )
+    // ch_versions = ch_versions.mix(GENOME_COVERAGE.out.versions.first())
+
     emit:
     bam          = PICARD_MARKDUPLICATES.out.bam       // channel: [ val(meta), path(bam) ]
+    bai          = SAMTOOLS_INDEX.out.index            // channel: [ val(meta), path(bai) ]
+    bam_bai      = ch_bam_bai                          // channel: [ val(meta), path(bam), path(bai) ]
     metrics      = PICARD_MARKDUPLICATES.out.metrics   // channel: [ val(meta), path(metrics) ]
     coverage     = COVERAGE_STATS.out.coverage         // channel: [ val(meta), path(tsv) ]
+    genome_cov   = GENOME_COVERAGE.out.coverage        // channel: [ val(meta), path(tsv) ]
     // versions     = ch_versions                         // channel: [ path(versions.yml) ]
 }

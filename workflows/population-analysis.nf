@@ -1,6 +1,8 @@
 nextflow.enable.dsl = 2
 
-include { READS_MAPPING } from '../subworkflows/local/reads_mapping'
+include { READS_MAPPING     } from '../subworkflows/local/reads_mapping'
+include { PREPARE_REFERENCE } from '../subworkflows/local/prepare_reference'
+include { VARIANT_CALLING   } from '../subworkflows/local/variant_calling'
 
 workflow POP_ANALYSIS_FLOW {
     main:
@@ -8,6 +10,9 @@ workflow POP_ANALYSIS_FLOW {
     if (!params.fasta) { error "Missing required parameter: --fasta" }
     if (params.min_coverage == null || !params.min_coverage.toString().isNumber() || (params.min_coverage as double) < 0) {
         error "Invalid --min_coverage '${params.min_coverage}': must be a number >= 0"
+    }
+    if (!params.ploidy.toString().isInteger() || (params.ploidy as int) < 1) {
+        error "Invalid --ploidy '${params.ploidy}': must be a whole number >= 1"
     }
 
     def ch_reads = channel
@@ -30,6 +35,21 @@ workflow POP_ANALYSIS_FLOW {
         params.min_coverage
     )
 
+    //
+    // Reference files for GATK (.fai, .dict; decompressed if .gz)
+    //
+    PREPARE_REFERENCE(ch_fasta)
+
+    //
+    // Per-sample GVCFs with HaplotypeCaller (samples passing --min_coverage only)
+    //
+    VARIANT_CALLING(
+        READS_MAPPING.out.bam,
+        PREPARE_REFERENCE.out.fasta,
+        PREPARE_REFERENCE.out.fai,
+        PREPARE_REFERENCE.out.dict
+    )
+
     emit:
     bam        = READS_MAPPING.out.bam        // [ meta, bam, bai ] samples passing --min_coverage
     bam_all    = READS_MAPPING.out.bam_all
@@ -37,5 +57,9 @@ workflow POP_ANALYSIS_FLOW {
     metrics    = READS_MAPPING.out.metrics
     coverage   = READS_MAPPING.out.coverage
     genome_cov = READS_MAPPING.out.genome_cov
+    gvcf       = VARIANT_CALLING.out.gvcf
+    gvcf_tbi   = VARIANT_CALLING.out.tbi
+    vcf        = VARIANT_CALLING.out.vcf          // joint-genotyped cohort VCF
+    vcf_tbi    = VARIANT_CALLING.out.vcf_tbi
 
 }

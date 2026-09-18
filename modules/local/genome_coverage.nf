@@ -67,7 +67,7 @@ process GENOME_COVERAGE {
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
     printf "sample\\tgenome_length\\taligned_bases\\tmean_depth\\tbreadth_1x_pct\\n" > ${prefix}.genome_coverage.tsv
-
+        printf "sample\\tgenome_length\\taligned_bases\\tmean_depth\\tbreadth_1x_pct\\n${prefix}\\t0\\t0\\t0.000\\t0.00\\n" > ${prefix}.genome_coverage.tsv
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         samtools: \$(samtools --version | head -1 | sed 's/samtools //')

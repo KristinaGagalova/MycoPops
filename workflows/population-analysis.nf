@@ -14,6 +14,10 @@ workflow POP_ANALYSIS_FLOW {
     if (!params.ploidy.toString().isInteger() || (params.ploidy as int) < 1) {
         error "Invalid --ploidy '${params.ploidy}': must be a whole number >= 1"
     }
+    if (params.min_genotype_rate == null || !params.min_genotype_rate.toString().isNumber() ||
+        (params.min_genotype_rate as double) < 0 || (params.min_genotype_rate as double) > 1) {
+        error "Invalid --min_genotype_rate '${params.min_genotype_rate}': must be a number between 0 and 1"
+    }
 
     def ch_reads = channel
         .fromPath(params.input, checkIfExists: true)
@@ -47,7 +51,8 @@ workflow POP_ANALYSIS_FLOW {
         READS_MAPPING.out.bam,
         PREPARE_REFERENCE.out.fasta,
         PREPARE_REFERENCE.out.fai,
-        PREPARE_REFERENCE.out.dict
+        PREPARE_REFERENCE.out.dict,
+        params.min_genotype_rate
     )
 
     emit:
@@ -61,5 +66,8 @@ workflow POP_ANALYSIS_FLOW {
     gvcf_tbi   = VARIANT_CALLING.out.tbi
     vcf        = VARIANT_CALLING.out.vcf          // joint-genotyped cohort VCF
     vcf_tbi    = VARIANT_CALLING.out.vcf_tbi
-
+    filtered_vcf   = VARIANT_CALLING.out.filtered_vcf    // FINAL filtered cohort VCF
+    flagged_vcf    = VARIANT_CALLING.out.flagged_vcf
+    pass_vcf       = VARIANT_CALLING.out.pass_vcf
+    filter_summary = VARIANT_CALLING.out.filter_summary
 }

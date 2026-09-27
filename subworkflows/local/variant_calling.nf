@@ -12,6 +12,9 @@
                                          -> cohort.combined.g.vcf.gz.tbi
       4. GenotypeGVCFs                   (7.GenotypeGVCF.sh)
            --max-alternate-alleles 4     -> cohort.genotyped.vcf.gz
+      5. VariantFiltration + genotype-rate filter, in one local module
+                                         (8.VariantFiltration.sh, 9.FilterGenotypeRate.sh)
+                                         -> cohort.filtered.vcf.gz
 
     Tool arguments are set in conf/modules.config.
     Only samples that passed COVERAGE_FILTER reach this subworkflow.
@@ -22,6 +25,7 @@ include { GATK4_HAPLOTYPECALLER  } from '../../modules/nf-core/gatk4/haplotypeca
 include { GATK4_COMBINEGVCFS     } from '../../modules/nf-core/gatk4/combinegvcfs/main'
 include { GATK4_INDEXFEATUREFILE } from '../../modules/nf-core/gatk4/indexfeaturefile/main'
 include { GATK4_GENOTYPEGVCFS    } from '../../modules/nf-core/gatk4/genotypegvcfs/main'
+include { VARIANT_FILTRATION     } from '../../modules/local/variant_filtration'
 
 workflow VARIANT_CALLING {
 
@@ -30,6 +34,7 @@ workflow VARIANT_CALLING {
     ch_fasta   // value channel: [ val(meta), path(fasta) ]
     ch_fai     // value channel: [ val(meta), path(fai) ]
     ch_dict    // value channel: [ val(meta), path(dict) ]
+    min_genotype_rate  // val: minimum fraction of samples with a genotype call
 
     main:
     //
@@ -89,10 +94,25 @@ workflow VARIANT_CALLING {
         [ [:], [] ]    // dbsnp_tbi
     )
 
+    //
+    // STEP 5: Hard-filter the cohort VCF, then drop poorly genotyped variants
+    //
+    VARIANT_FILTRATION(
+        GATK4_GENOTYPEGVCFS.out.vcf.join(GATK4_GENOTYPEGVCFS.out.tbi, failOnMismatch: true),
+        ch_fasta,
+        ch_fai,
+        ch_dict,
+        min_genotype_rate
+    )
+
     emit:
     gvcf          = GATK4_HAPLOTYPECALLER.out.vcf        // channel: [ val(meta), path(<sample>.g.vcf.gz) ]
     tbi           = GATK4_HAPLOTYPECALLER.out.tbi        // channel: [ val(meta), path(<sample>.g.vcf.gz.tbi) ]
     combined_gvcf = GATK4_COMBINEGVCFS.out.combined_gvcf // channel: [ val(meta), path(cohort.combined.g.vcf.gz) ]
-    vcf           = GATK4_GENOTYPEGVCFS.out.vcf          // channel: [ val(meta), path(cohort.genotyped.vcf.gz) ]
+    vcf           = GATK4_GENOTYPEGVCFS.out.vcf          // channel: [ val(meta), path(cohort.genotyped.vcf.gz) ] raw joint calls
     vcf_tbi       = GATK4_GENOTYPEGVCFS.out.tbi          // channel: [ val(meta), path(cohort.genotyped.vcf.gz.tbi) ]
+    filtered_vcf  = VARIANT_FILTRATION.out.vcf           // channel: [ val(meta), path(vcf), path(tbi) ] FINAL filtered set
+    flagged_vcf   = VARIANT_FILTRATION.out.flagged       // channel: [ val(meta), path(vcf), path(tbi) ] all variants, FILTER tagged
+    pass_vcf      = VARIANT_FILTRATION.out.pass          // channel: [ val(meta), path(vcf), path(tbi) ] PASS only, before genotype-rate filter
+    filter_summary = VARIANT_FILTRATION.out.summary      // channel: [ val(meta), path(tsv) ]
 }

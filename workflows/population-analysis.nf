@@ -2,7 +2,7 @@ nextflow.enable.dsl = 2
 
 include { READS_MAPPING     } from '../subworkflows/local/reads_mapping'
 include { PREPARE_REFERENCE } from '../subworkflows/local/prepare_reference'
-include { VARIANT_CALLING   } from '../subworkflows/local/variant_calling'
+include { VARIANT           } from '../subworkflows/local/variant'
 
 workflow POP_ANALYSIS_FLOW {
     main:
@@ -45,9 +45,9 @@ workflow POP_ANALYSIS_FLOW {
     PREPARE_REFERENCE(ch_fasta)
 
     //
-    // Per-sample GVCFs with HaplotypeCaller (samples passing --min_coverage only)
+    // Variant calling + filtering (samples passing --min_coverage only)
     //
-    VARIANT_CALLING(
+    VARIANT(
         READS_MAPPING.out.bam,
         PREPARE_REFERENCE.out.fasta,
         PREPARE_REFERENCE.out.fai,
@@ -62,12 +62,12 @@ workflow POP_ANALYSIS_FLOW {
     metrics    = READS_MAPPING.out.metrics
     coverage   = READS_MAPPING.out.coverage
     genome_cov = READS_MAPPING.out.genome_cov
-    gvcf       = VARIANT_CALLING.out.gvcf
-    gvcf_tbi   = VARIANT_CALLING.out.tbi
-    vcf        = VARIANT_CALLING.out.vcf          // joint-genotyped cohort VCF
-    vcf_tbi    = VARIANT_CALLING.out.vcf_tbi
-    filtered_vcf   = VARIANT_CALLING.out.filtered_vcf    // FINAL filtered cohort VCF
-    flagged_vcf    = VARIANT_CALLING.out.flagged_vcf
-    pass_vcf       = VARIANT_CALLING.out.pass_vcf
-    filter_summary = VARIANT_CALLING.out.filter_summary
+    gvcf       = VARIANT.out.gvcf
+    gvcf_tbi   = VARIANT.out.gvcf_tbi
+    vcf        = VARIANT.out.vcf          // joint-genotyped cohort VCF
+    vcf_tbi    = VARIANT.out.vcf_tbi
+    filtered_vcf   = VARIANT.out.filtered_vcf    // FINAL filtered cohort VCF
+    flagged_vcf    = VARIANT.out.flagged_vcf
+    pass_vcf       = VARIANT.out.pass_vcf
+    filter_summary = VARIANT.out.filter_summary
 }

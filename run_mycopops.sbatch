@@ -22,4 +22,5 @@ nextflow run ./main.nf \
     --outdir ./results \
     --min_genotype_rate 0.8 \
     -profile pawsey_setonix,singularity \
+    --trim_reads \
     -resume 

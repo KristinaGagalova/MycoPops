@@ -51,3 +51,8 @@ mise.toml
 singularity/
 singularity_cache/
 apptainer/
+# Slurm job logs
+slurm-*.out
+slurm-*.err
+*_%A_%a.out
+.nextflow.log*

@@ -66,8 +66,9 @@ workflow POP_ANALYSIS_FLOW {
     gvcf_tbi   = VARIANT.out.gvcf_tbi
     vcf        = VARIANT.out.vcf          // joint-genotyped cohort VCF
     vcf_tbi    = VARIANT.out.vcf_tbi
-    filtered_vcf   = VARIANT.out.filtered_vcf    // FINAL filtered cohort VCF
+    filtered_vcf   = VARIANT.out.filtered_vcf    // FINAL biallelic SNP set, with IDs
+    biallelic_vcf  = VARIANT.out.biallelic_vcf
+    snps_pass_vcf  = VARIANT.out.snps_pass_vcf
+    indels_vcf     = VARIANT.out.indels_vcf
     flagged_vcf    = VARIANT.out.flagged_vcf
-    pass_vcf       = VARIANT.out.pass_vcf
-    filter_summary = VARIANT.out.filter_summary
 }

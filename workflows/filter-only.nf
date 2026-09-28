@@ -77,8 +77,9 @@ workflow FILTER_ONLY_FLOW {
     )
 
     emit:
-    filtered_vcf   = VARIANT_FILTERING.out.vcf
-    flagged_vcf    = VARIANT_FILTERING.out.flagged
-    pass_vcf       = VARIANT_FILTERING.out.pass
-    filter_summary = VARIANT_FILTERING.out.summary
+    filtered_vcf  = VARIANT_FILTERING.out.vcf
+    biallelic_vcf = VARIANT_FILTERING.out.biallelic
+    snps_pass_vcf = VARIANT_FILTERING.out.snps_pass
+    indels_vcf    = VARIANT_FILTERING.out.indels_pass
+    flagged_vcf   = VARIANT_FILTERING.out.flagged
 }

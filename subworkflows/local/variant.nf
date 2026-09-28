@@ -8,8 +8,10 @@
                          (6.GATK_HaplotypeCaller_array.sh, CombineGVCFs.sh,
                           7.GenotypeGVCF.sh)
 
-      VARIANT_FILTERING  cohort VCF -> hard-filtered, genotype-rate-filtered VCF
-                         (8.VariantFiltration.sh, 9.FilterGenotypeRate.sh)
+      VARIANT_FILTERING  cohort VCF -> final biallelic SNP set with variant IDs
+                         (8.VariantFiltration.sh, 10.SelectVariantsSNP_INDELs.sh,
+                          9.FilterGenotypeRate.sh, 11.biallelic_fitering.sh,
+                          12.AddIDtoVCF.sh)
 
     They are kept separate so that filtering can be re-run on its own, without
     repeating the genotyping. Two ways to do that:
@@ -65,8 +67,9 @@ workflow VARIANT {
     vcf_tbi        = VARIANT_CALLING.out.vcf_tbi         // [ val(meta), path(tbi) ]
 
     // from VARIANT_FILTERING
-    filtered_vcf   = VARIANT_FILTERING.out.vcf           // [ val(meta), path(vcf), path(tbi) ] FINAL set
-    flagged_vcf    = VARIANT_FILTERING.out.flagged       // [ val(meta), path(vcf), path(tbi) ] all variants, FILTER tagged
-    pass_vcf       = VARIANT_FILTERING.out.pass          // [ val(meta), path(vcf), path(tbi) ] PASS only
-    filter_summary = VARIANT_FILTERING.out.summary       // [ val(meta), path(tsv) ]
+    filtered_vcf   = VARIANT_FILTERING.out.vcf            // [ meta, vcf, tbi ] FINAL SNP set, with IDs
+    biallelic_vcf  = VARIANT_FILTERING.out.biallelic      // [ meta, vcf, tbi ] before IDs
+    snps_pass_vcf  = VARIANT_FILTERING.out.snps_pass      // [ meta, vcf, tbi ] PASS SNPs
+    indels_vcf     = VARIANT_FILTERING.out.indels_pass    // [ meta, vcf, tbi ] PASS INDELs
+    flagged_vcf    = VARIANT_FILTERING.out.flagged        // [ meta, vcf, tbi ] all variants, FILTER tagged
 }

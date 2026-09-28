@@ -13,6 +13,9 @@
       4. GenotypeGVCFs                   (7.GenotypeGVCF.sh)
            --max-alternate-alleles 4     -> cohort.genotyped.vcf.gz
 
+    Filtering of this cohort VCF is a separate subworkflow (VARIANT_FILTERING);
+    both are called by the VARIANT subworkflow.
+
     Tool arguments are set in conf/modules.config.
     Only samples that passed COVERAGE_FILTER reach this subworkflow.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -93,6 +96,6 @@ workflow VARIANT_CALLING {
     gvcf          = GATK4_HAPLOTYPECALLER.out.vcf        // channel: [ val(meta), path(<sample>.g.vcf.gz) ]
     tbi           = GATK4_HAPLOTYPECALLER.out.tbi        // channel: [ val(meta), path(<sample>.g.vcf.gz.tbi) ]
     combined_gvcf = GATK4_COMBINEGVCFS.out.combined_gvcf // channel: [ val(meta), path(cohort.combined.g.vcf.gz) ]
-    vcf           = GATK4_GENOTYPEGVCFS.out.vcf          // channel: [ val(meta), path(cohort.genotyped.vcf.gz) ]
+    vcf           = GATK4_GENOTYPEGVCFS.out.vcf          // channel: [ val(meta), path(cohort.genotyped.vcf.gz) ] raw joint calls
     vcf_tbi       = GATK4_GENOTYPEGVCFS.out.tbi          // channel: [ val(meta), path(cohort.genotyped.vcf.gz.tbi) ]
 }

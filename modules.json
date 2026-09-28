@@ -19,6 +19,13 @@
                             "modules"
                         ]
                     },
+                    "fastp": {
+                        "branch": "master",
+                        "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    },
                     "picard/markduplicates": {
                         "branch": "master",
                         "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
@@ -27,12 +34,12 @@
                         ]
                     },
                     "samtools/index": {
-    			"branch": "master",
-    			"git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
-    			"installed_by": [
-        		"modules"
-    			]
-			}
+                        "branch": "master",
+                        "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
+                        "installed_by": [
+                            "modules"
+                        ]
+                    }
                 }
             }
         }

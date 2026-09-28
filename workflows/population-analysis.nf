@@ -36,7 +36,8 @@ workflow POP_ANALYSIS_FLOW {
         ch_reads,
         ch_fasta,
         params.genome_size,
-        params.min_coverage
+        params.min_coverage,
+        params.trim_reads
     )
 
     //

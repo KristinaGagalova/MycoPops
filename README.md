@@ -4,7 +4,7 @@
 
 MycoPops is a [Nextflow](https://www.nextflow.io/) pipeline that takes paired-end Illumina reads from many fungal isolates and turns them into a single, filtered, analysis-ready SNP file for population genetics (PCA, ADMIXTURE, phylogenetics and so on).
 
-It aligns reads to a reference genome, marks duplicates, measures coverage, **automatically removes low-coverage samples**, calls variants per sample with GATK HaplotypeCaller (haploid by default), genotypes all samples together, then **hard-filters the variants, keeps well-genotyped biallelic SNPs and gives each one a stable ID**.
+It optionally trims the reads with fastp, aligns them to a reference genome, marks duplicates, measures coverage, **automatically removes low-coverage samples**, calls variants per sample with GATK HaplotypeCaller (haploid by default), genotypes all samples together, then **hard-filters the variants, keeps well-genotyped biallelic SNPs and gives each one a stable ID**.
 
 It was built from the bash scripts in [WPM_population_analysis](https://github.com/fc87290118/WPM_population_analysis) and is set up to run on the **Pawsey Setonix** supercomputer, although it can run on any Linux machine with Nextflow and Singularity or Docker.
 
@@ -20,12 +20,13 @@ It was built from the bash scripts in [WPM_population_analysis](https://github.c
 6. [Parameters](#6-parameters)
 7. [Output files](#7-output-files)
 8. [Coverage filtering](#8-coverage-filtering)
-9. [Variant filtering](#9-variant-filtering)
-10. [Re-running only the filtering](#10-re-running-only-the-filtering)
-11. [Changing resources and tool settings](#11-changing-resources-and-tool-settings)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Software versions](#13-software-versions)
-14. [Credits](#14-credits)
+9. [Read trimming](#9-read-trimming)
+10. [Variant filtering](#10-variant-filtering)
+11. [Re-running only the filtering](#11-re-running-only-the-filtering)
+12. [Changing resources and tool settings](#12-changing-resources-and-tool-settings)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Software versions](#14-software-versions)
+15. [Credits](#15-credits)
 
 ---
 
@@ -33,7 +34,8 @@ It was built from the bash scripts in [WPM_population_analysis](https://github.c
 
 ```mermaid
 flowchart TD
-    A[Paired FASTQ files<br/>+ reference FASTA] --> B[bwa-mem2 index + align + sort]
+    A[Paired FASTQ files<br/>+ reference FASTA] --> T[fastp trimming<br/>optional: --trim_reads]
+    T --> B[bwa-mem2 index + align + sort]
     B --> C[Picard MarkDuplicates<br/>+ samtools index]
     C --> D[Coverage per sample<br/>samtools depth]
     D --> E{Mean depth ≥ --min_coverage?}
@@ -51,20 +53,21 @@ flowchart TD
 
 | Step | Tool | What it does |
 |------|------|--------------|
-| 1 | bwa-mem2 index | Indexes the reference genome (done automatically, once) |
-| 2 | bwa-mem2 mem + samtools sort | Aligns each sample's reads and sorts the BAM |
-| 3 | Picard MarkDuplicates + samtools index | Flags PCR/optical duplicates and indexes the BAM |
-| 4 | samtools stats (`COVERAGE_STATS`) | Quick coverage estimate: mapped reads × read length ÷ genome size |
-| 5 | samtools depth (`GENOME_COVERAGE`) | Accurate mean depth and breadth from the aligned bases (duplicates excluded) |
-| 6 | `COVERAGE_FILTER` | Removes samples below `--min_coverage` (default 20×) from all later steps |
-| 7 | gunzip, samtools faidx, GATK CreateSequenceDictionary | Prepares the reference files GATK needs |
-| 8 | GATK HaplotypeCaller | Calls variants per sample in GVCF mode (`-ERC GVCF -ploidy 1`) |
-| 9 | GATK CombineGVCFs + IndexFeatureFile | Merges all sample GVCFs into one cohort GVCF |
-| 10 | GATK GenotypeGVCFs | Joint genotyping of all samples (`--max-alternate-alleles 4`) |
-| 11 | GATK VariantFiltration (`VARIANT_FILTRATION`) | Flags variants failing 7 quality filters; nothing removed yet |
-| 12 | GATK SelectVariants (`SELECT_VARIANTS`) | Keeps PASS SNPs and PASS INDELs, separately |
-| 13 | GATK SelectVariants (`FILTER_SNPS`) | Keeps SNPs called in ≥ `--min_genotype_rate` of samples, then biallelic only |
-| 14 | bcftools annotate (`ADD_VARIANT_IDS`) | Gives every SNP an ID of the form `CHROM_POS_REF_ALT` |
+| 1 | fastp (`FASTP`) | **Optional.** Adapter and quality trimming of the raw reads. Off unless `--trim_reads` is set |
+| 2 | bwa-mem2 index | Indexes the reference genome (done automatically, once) |
+| 3 | bwa-mem2 mem + samtools sort | Aligns each sample's reads and sorts the BAM |
+| 4 | Picard MarkDuplicates + samtools index | Flags PCR/optical duplicates and indexes the BAM |
+| 5 | samtools stats (`COVERAGE_STATS`) | Quick coverage estimate: mapped reads × read length ÷ genome size |
+| 6 | samtools depth (`GENOME_COVERAGE`) | Accurate mean depth and breadth from the aligned bases (duplicates excluded) |
+| 7 | `COVERAGE_FILTER` | Removes samples below `--min_coverage` (default 20×) from all later steps |
+| 8 | gunzip, samtools faidx, GATK CreateSequenceDictionary | Prepares the reference files GATK needs |
+| 9 | GATK HaplotypeCaller | Calls variants per sample in GVCF mode (`-ERC GVCF -ploidy 1`) |
+| 10 | GATK CombineGVCFs + IndexFeatureFile | Merges all sample GVCFs into one cohort GVCF |
+| 11 | GATK GenotypeGVCFs | Joint genotyping of all samples (`--max-alternate-alleles 4`) |
+| 12 | GATK VariantFiltration (`VARIANT_FILTRATION`) | Flags variants failing 7 quality filters; nothing removed yet |
+| 13 | GATK SelectVariants (`SELECT_VARIANTS`) | Keeps PASS SNPs and PASS INDELs, separately |
+| 14 | GATK SelectVariants (`FILTER_SNPS`) | Keeps SNPs called in ≥ `--min_genotype_rate` of samples, then biallelic only |
+| 15 | bcftools annotate (`ADD_VARIANT_IDS`) | Gives every SNP an ID of the form `CHROM_POS_REF_ALT` |
 
 You do not need to install any of these tools. Nextflow downloads a ready-made container for each one the first time it is used.
 
@@ -207,11 +210,11 @@ Change these lines (and nothing else is needed):
 1. `--account=` to your Pawsey project code
 2. `REF=` to the full path of your reference genome
 3. `--genome_size` to your genome size in base pairs
-4. Optionally add `--min_coverage <number>` (default 20), `--min_genotype_rate <0-1>` (default 0.9) or `--ploidy <number>` (default 1). See [section 6](#6-parameters).
+4. Optionally add `--trim_reads` (if your reads are untrimmed), `--min_coverage <number>` (default 20), `--min_genotype_rate <0-1>` (default 0.9) or `--ploidy <number>` (default 1). See [section 6](#6-parameters).
 
 > **Careful with the backslashes.** Each line of the `nextflow run` command except the last ends with ` \` (a space and a backslash), which tells bash the command continues on the next line. Do not put anything after the backslash, not even a space or a comment.
 
-> The `#SBATCH` settings at the top are only for the small head job that runs Nextflow. The resources for the actual analysis steps are set in `nextflow.config` (see [section 11](#11-changing-resources-and-tool-settings)).
+> The `#SBATCH` settings at the top are only for the small head job that runs Nextflow. The resources for the actual analysis steps are set in `nextflow.config` (see [section 12](#12-changing-resources-and-tool-settings)).
 
 > If the `module load` lines fail, check which versions exist with `module avail nextflow` and `module avail singularity`, and update the lines.
 
@@ -250,7 +253,7 @@ To stop a run, cancel the head job with `scancel <job number>`. Nextflow then st
 
 Runs can stop because a step ran out of memory or time, or because the head job reached its own time limit (24 hours in the script above; large cohorts can take longer than that).
 
-Fix the cause if there is one (see [Troubleshooting](#12-troubleshooting)), then submit the same script again:
+Fix the cause if there is one (see [Troubleshooting](#13-troubleshooting)), then submit the same script again:
 
 ```bash
 sbatch run_mycopops.sbatch
@@ -291,7 +294,7 @@ rm -rf results/bwamem_mapping/     # intermediate BAMs; the final BAMs are in re
 - **Partitions and time limits.** Setonix's `work` partition allows jobs up to 24 hours. The `long` partition allows up to 96 hours, but only 4 jobs per user can run on it at once. The `pawsey_setonix` profile automatically sends any step that asks for more than 24 hours to `long`. For example, if you raise the time for GenotypeGVCFs to `72h` it moves to `long` without any other change.
 - **Head job time.** The head job must stay alive for the whole run. If your cohort takes more than a day, either resubmit with `-resume` whenever it stops (Step 8), or give the head job more time by changing it to `#SBATCH --partition=long` and `#SBATCH --time=4-00:00:00`.
 - **Where jobs are charged.** Steps are charged to your default Pawsey project (`$PAWSEY_PROJECT`). If you belong to several projects, check it with `echo $PAWSEY_PROJECT`.
-- **Service units.** Setonix charges by core-hours (1 SU = 1 core for 1 hour), and jobs asking for a lot of memory are charged for the matching share of a node. Per-sample steps run once for every sample, so their CPU settings matter most for your total cost (see [section 11](#11-changing-resources-and-tool-settings)).
+- **Service units.** Setonix charges by core-hours (1 SU = 1 core for 1 hour), and jobs asking for a lot of memory are charged for the matching share of a node. Per-sample steps run once for every sample, so their CPU settings matter most for your total cost (see [section 12](#12-changing-resources-and-tool-settings)).
 - **Queue size.** The profile lets Nextflow have at most 50 jobs in the queue at once, so a large cohort is processed in waves.
 - **Launch folder.** Nextflow creates its `work` folder, and the `singularity_cache` folder, inside the folder you launch from. This is another reason to always launch from `$MYSCRATCH`.
 
@@ -311,7 +314,7 @@ nextflow run main.nf \
     -resume
 ```
 
-Use `-profile docker` instead of `singularity` if you have Docker. Note that the default resources in `nextflow.config` expect a large machine (for example 32 GB of memory for alignment and 64 GB for joint genotyping). On a smaller computer, lower them with a custom config (see [section 11](#11-changing-resources-and-tool-settings)).
+Use `-profile docker` instead of `singularity` if you have Docker. Note that the default resources in `nextflow.config` expect a large machine (for example 32 GB of memory for alignment and 64 GB for joint genotyping). On a smaller computer, lower them with a custom config (see [section 12](#12-changing-resources-and-tool-settings)).
 
 ---
 
@@ -330,6 +333,8 @@ isolate_02,/scratch/pawsey1142/me/reads/isolate_02_1.fastq.gz,/scratch/pawsey114
 | `sample` | A unique name for the sample. Use letters, numbers, `_` and `-` only (no spaces). This name appears in every output file and in the final VCF |
 | `fastq_1` | Full path to the R1 (forward) FASTQ file |
 | `fastq_2` | Full path to the R2 (reverse) FASTQ file |
+
+Whether these are raw or already-trimmed reads is up to you: pass raw reads and add `--trim_reads` to have fastp clean them ([section 9](#9-read-trimming)), or pass reads that were trimmed beforehand and leave that option off.
 
 Rules:
 
@@ -351,10 +356,11 @@ Parameters are added to the `nextflow run` command with two dashes, for example 
 | `--fasta` | **yes** | | Path to the reference genome FASTA (can be `.gz`) |
 | `--genome_size` | **yes** | | Genome size in base pairs, used by the quick coverage estimate. See [how to find it](#how-to-find-the-genome-size) |
 | `--outdir` | no | `./results` | Folder for the results |
+| `--trim_reads` | no | `false` | Run fastp on the reads before aligning. Use it when the sample sheet points at raw reads. See [section 9](#9-read-trimming) |
 | `--min_coverage` | no | `20` | Minimum mean depth (×) a sample needs to go on to variant calling. `0` keeps every sample that has any coverage |
 | `--ploidy` | no | `1` | Ploidy given to HaplotypeCaller. `1` = haploid, right for most fungal isolates |
 | `--min_genotype_rate` | no | `0.9` | Minimum fraction of samples that must have a genotype call at a SNP. `0.9` = keep SNPs called in at least 90% of samples |
-| `--vcf` | no | | Only for `-entry FILTER`: an existing cohort VCF to filter. See [section 10](#10-re-running-only-the-filtering) |
+| `--vcf` | no | | Only for `-entry FILTER`: an existing cohort VCF to filter. See [section 11](#11-re-running-only-the-filtering) |
 | `--manifest_sep` | no | `,` | Separator in the sample sheet. Use `'\t'` for tab-separated |
 
 Nextflow's own options use a **single** dash:
@@ -373,6 +379,10 @@ Everything is written to the folder given by `--outdir` (default `results/`):
 
 ```
 results/
+├── fastp/                   only when --trim_reads is used
+│   ├── <sample>.fastp.html               trimming report, open in a browser
+│   ├── <sample>.fastp.json
+│   └── <sample>.fastp.log
 ├── bwamem_index/            bwa-mem2 index of the reference
 ├── bwamem_mapping/          sorted BAM per sample, before duplicate marking (intermediate)
 │   └── <sample>.bam
@@ -412,7 +422,7 @@ results/
 
 **The main result is `variant_filtering/cohort.snps_biallelic.withIDs.vcf.gz`.** It holds the biallelic SNPs that passed every filter, for the samples that passed the coverage filter, each with an ID of the form `ctg1_15000_C_A`. That is the file to feed into LD pruning, PLINK and ADMIXTURE.
 
-`genotyping/cohort.genotyped.vcf.gz` is the unfiltered joint call set, kept in case you want to filter differently later ([section 10](#10-re-running-only-the-filtering)).
+`genotyping/cohort.genotyped.vcf.gz` is the unfiltered joint call set, kept in case you want to filter differently later ([section 11](#11-re-running-only-the-filtering)).
 
 ### The coverage files explained
 
@@ -443,11 +453,54 @@ To change the threshold, add for example `--min_coverage 15` to the `nextflow ru
 
 ---
 
-## 9. Variant filtering
+## 9. Read trimming
+
+**This step is off by default.** Turn it on with `--trim_reads` only if your sample sheet points at **raw** reads. If the reads were already trimmed before you got them, leave it off so they are not trimmed twice.
+
+```bash
+nextflow run main.nf ... --trim_reads
+```
+
+When it is on, fastp runs on each sample before alignment. It removes adapter sequence, trims poor-quality ends and discards reads that fail its quality filters, using fastp's own defaults (the same as the original `fastp_array.sh`).
+
+The important part for a paired-end pipeline is that **fastp keeps the two files in step with each other**. It writes R1 and R2 as two separate files, and when either mate of a pair fails a filter it drops **both** mates, so the files always have the same reads in the same order. That is what bwa-mem2 requires — a pair of files that have drifted out of sync makes it fail with `paired reads have different names`.
+
+Reports land in `results/fastp/`, one set per sample:
+
+| File | What's in it |
+|------|--------------|
+| `<sample>.fastp.html` | Readable report: quality before and after, adapter content, duplication |
+| `<sample>.fastp.json` | The same numbers as data, if you want to tabulate across samples |
+| `<sample>.fastp.log` | fastp's console output |
+
+Open the HTML in a browser to see how much was removed. To pull the read counts for every sample at once:
+
+```bash
+printf "sample\treads_before\treads_after\n"
+for f in results/fastp/*.fastp.json; do
+    python3 -c "import json,sys; d=json.load(open(sys.argv[1])); s=d['summary']; print('%s\t%d\t%d' % (sys.argv[1].split('/')[-1].replace('.fastp.json',''), s['before_filtering']['total_reads'], s['after_filtering']['total_reads']))" "$f"
+done
+```
+
+The trimmed FASTQ files are **not** copied into `results/` by default, because they are large and go straight into the aligner. If you want them on disk, add `fastq.gz` to the `pattern` for `FASTP` in `conf/containers.config`.
+
+> **Careful with an existing run.** Turning trimming on changes the reads going into alignment, so every sample is realigned and everything downstream is recomputed. On a cohort that has already been through genotyping that is hours of work. Decide before the first run if you can.
+
+To pass extra fastp options (for example a minimum length after trimming), set `ext.args` for `FASTP` in `conf/modules.config`:
+
+```groovy
+    withName: 'FASTP' {
+        ext.args = '--length_required 50'
+    }
+```
+
+---
+
+## 10. Variant filtering
 
 After joint genotyping, four steps turn the raw calls into the final SNP set. Every intermediate file is kept in `variant_filtering/`, and `filtering_summary.tsv` records how many variants survived each step.
 
-### Step 11: flag low-quality variants
+### Step 12: flag low-quality variants
 
 `GATK VariantFiltration` labels variants failing any of seven filters. It **removes nothing** — it writes the filter's name into the VCF's FILTER column, so `cohort.flagged.vcf.gz` still holds every variant.
 
@@ -468,13 +521,13 @@ Two things are worth knowing about these:
 
 To change a cut-off, edit `ext.args` for `VARIANT_FILTRATION` in `conf/modules.config`.
 
-### Step 12: keep PASS SNPs and PASS INDELs
+### Step 13: keep PASS SNPs and PASS INDELs
 
 `GATK SelectVariants` splits the flagged VCF into SNPs and INDELs, keeping only variants tagged PASS. **Only the SNPs go on to the next steps**; the INDELs are written to `cohort.indels_pass.vcf.gz` for inspection.
 
 A site carrying both a SNP allele and an indel allele has GATK type MIXED and is picked up by neither, so such sites are dropped here.
 
-### Step 13: genotype rate, then biallelic only
+### Step 14: genotype rate, then biallelic only
 
 Two site-level filters on the PASS SNPs:
 
@@ -483,7 +536,7 @@ Two site-level filters on the PASS SNPs:
 
 To change the threshold, pass `--min_genotype_rate 0.8` on the command line. There is no need to edit any file.
 
-### Step 14: variant IDs
+### Step 15: variant IDs
 
 `bcftools annotate` gives every SNP an ID like `ctg1_15000_C_A`, so downstream tools that track variants by ID (PLINK, LD pruning, ADMIXTURE) have a stable, unique handle on each site. PLINK in particular needs non-missing IDs. Any ID already present is left untouched.
 
@@ -511,7 +564,7 @@ The number prefixes are the original WPM script numbers, so the metrics sort int
 
 ---
 
-## 10. Re-running only the filtering
+## 11. Re-running only the filtering
 
 Filtering is a separate subworkflow from calling, so you can re-try thresholds without repeating the genotyping, which takes hours.
 
@@ -537,7 +590,7 @@ Give each threshold its own `--outdir` and you can compare the summaries directl
 
 ---
 
-## 11. Changing resources and tool settings
+## 12. Changing resources and tool settings
 
 ### Resources (CPUs, memory, time)
 
@@ -545,6 +598,7 @@ The resources for each step are in the `process { }` block of `nextflow.config`:
 
 | Step | CPUs | Memory | Time |
 |------|------|--------|------|
+| `FASTP` | 4 | 8 GB | 8 h |
 | `BWAMEM2_INDEX` | 4 | 32 GB | 2 h |
 | `BWAMEM2_MEM` | 16 | 32 GB | 8 h |
 | `PICARD_MARKDUPLICATES` | default | 32 GB | default |
@@ -580,12 +634,13 @@ The options passed to each tool are in `conf/modules.config`:
 
 | Step | Setting | Default |
 |------|---------|---------|
+| `FASTP` | Extra fastp options | none (fastp's defaults) |
 | `BWAMEM2_MEM` | Read group added to each BAM | `-M -R "@RG\tID:<sample>\tSM:<sample>"` |
 | `PICARD_MARKDUPLICATES` | Duplicate tagging | `--TAGGING_POLICY All` |
 | `GENOME_COVERAGE` | Extra `samtools depth` filters, for example `'-Q 20'` for a minimum mapping quality | none |
 | `GATK4_HAPLOTYPECALLER` | GVCF mode and ploidy | `-ERC GVCF -ploidy <--ploidy>` |
 | `GATK4_GENOTYPEGVCFS` | Maximum alternate alleles | `--max-alternate-alleles 4` |
-| `VARIANT_FILTRATION` | The seven hard-filter expressions | see [section 9](#9-variant-filtering) |
+| `VARIANT_FILTRATION` | The seven hard-filter expressions | see [section 10](#10-variant-filtering) |
 | `SELECT_VARIANTS` | Extra options for the SNP/INDEL selection | none |
 | `FILTER_SNPS` | Extra options for the biallelic step | none |
 | `ADD_VARIANT_IDS` | Variant ID template | `--set-id +'%CHROM\\_%POS\\_%REF\\_%FIRST_ALT'` |
@@ -594,7 +649,7 @@ The output folders are set in `conf/containers.config`.
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 **`Missing required parameter: --input`** (or `--fasta`)
 Add the missing parameter to the `nextflow run` command.
@@ -609,7 +664,7 @@ The value must be a number (`--min_coverage` can be `0` or more; `--ploidy` must
 A path in the sample sheet is wrong. Check it with `ls -l <path>` and use full paths.
 
 **A step failed with exit status 137 or 140**
-Out of memory (137) or out of time (140). See [section 11](#11-changing-resources-and-tool-settings), then resubmit.
+Out of memory (137) or out of time (140). See [section 12](#12-changing-resources-and-tool-settings), then resubmit.
 
 **The head job stopped after 24 hours but steps were still running**
 The head job reached its time limit. Submit the script again; `-resume` continues from where it stopped.
@@ -620,14 +675,20 @@ You are probably running from `$HOME`. Move the pipeline and data to `$MYSCRATCH
 **Files or the `work` folder disappeared**
 `/scratch` deletes files that have not been accessed for 21 days. Copy results you want to keep to Acacia soon after the run finishes.
 
+**`paired reads have different names` during alignment**
+R1 and R2 have drifted out of sync. This does not happen to fastp output, so it means the raw files were already mismatched — check them with `check_fastqs.sh`, or re-download the pair.
+
+**Reads look over-trimmed, or very little is left**
+The reads were probably trimmed twice: once before you got them and once by `--trim_reads`. Check `results/fastp/<sample>.fastp.html` — if almost nothing was removed, trimming was unnecessary; drop `--trim_reads`.
+
 **`Invalid --min_genotype_rate`**
 The value must be a number between 0 and 1. `0.9` means 90% of samples, not 90.
 
 **Very few variants left in the final file**
-Look at `results/variant_filtering/filtering_summary.tsv`. The `flagged_*` counts show which of the seven filters removed the most, and `snps_pass` versus `variants_input` shows the total loss. The cut-offs are strict by design; loosen them in `conf/modules.config` and re-run just the filtering ([section 10](#10-re-running-only-the-filtering)).
+Look at `results/variant_filtering/filtering_summary.tsv`. The `flagged_*` counts show which of the seven filters removed the most, and `snps_pass` versus `variants_input` shows the total loss. The cut-offs are strict by design; loosen them in `conf/modules.config` and re-run just the filtering ([section 11](#11-re-running-only-the-filtering)).
 
 **`12_variants_missing_id` is not 0**
-Some SNPs have no ID, which will upset PLINK. Check that step 14 ran and that the `ext.args` template in `conf/modules.config` still has its backslashes.
+Some SNPs have no ID, which will upset PLINK. Check that step 15 ran and that the `ext.args` template in `conf/modules.config` still has its backslashes.
 
 **No `genotyping/` folder in the results**
 Every sample was removed by the coverage filter. Check `results/coverage/excluded_samples.tsv`.
@@ -640,7 +701,7 @@ The end of `slurm-<job number>.out` names the failed step and its work folder, f
 
 ---
 
-## 13. Software versions
+## 14. Software versions
 
 Each step runs in its own container:
 
@@ -651,11 +712,12 @@ Each step runs in its own container:
 | samtools | 1.24 (indexing), 1.23.1 (coverage modules) |
 | GATK | 4.6.2.0 (all steps, pinned in `conf/containers.config`) |
 | bcftools | 1.19 (variant IDs only) |
+| fastp | 1.1.0 (only when `--trim_reads` is used) |
 | Nextflow | 23.04 or newer (tested with 25.04.6) |
 
 ---
 
-## 14. Credits
+## 15. Credits
 
 Pipeline by Dr Kristina Gagalova and Dr Grace Fang, adapted from the bash scripts by Grace Fang (Curtin University / Pawsey): https://github.com/fc87290118/WPM_population_analysis
 

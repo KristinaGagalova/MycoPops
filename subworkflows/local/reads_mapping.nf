@@ -1,4 +1,5 @@
 include { BWAMEM2_INDEX          } from '../../modules/nf-core/bwamem2/index/main'
+include { READ_TRIMMING          } from './read_trimming'
 include { ALIGN_MARKDUP_COVERAGE } from './align_markdup_coverage'
 include { COVERAGE_FILTER        } from './coverage_filter'
 
@@ -8,8 +9,19 @@ workflow READS_MAPPING {
     ch_fasta      // [ val(meta_ref), path(fasta) ]
     genome_size   // val
     min_coverage  // val: minimum mean depth to keep a sample
+    trim_reads    // val: true = run fastp on the reads first (fastp_array.sh)
 
     main:
+    //
+    // Optional: adapter/quality trimming with fastp before anything is aligned.
+    // Off by default; see --trim_reads.
+    //
+    def ch_reads_to_map = ch_reads
+    if (trim_reads) {
+        READ_TRIMMING(ch_reads)
+        ch_reads_to_map = READ_TRIMMING.out.reads
+    }
+
     // Build bwa-mem2 index only
     BWAMEM2_INDEX(ch_fasta)
     // Convert reference channels to VALUE channels so they're reused per sample
@@ -17,7 +29,7 @@ workflow READS_MAPPING {
     def ch_index_val = BWAMEM2_INDEX.out.index.first()
 
     ALIGN_MARKDUP_COVERAGE(
-        ch_reads,
+        ch_reads_to_map,
         ch_fasta_val,
         ch_index_val,
         genome_size
